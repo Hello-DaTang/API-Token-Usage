@@ -5,6 +5,10 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -18,6 +22,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Install dependencies
         run: npm install
@@ -27,3 +32,11 @@ jobs:
 
       - name: Package VSIX
         run: npm run package
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-token-usage-${{ github.sha }}
+          path: "*.vsix"
+          if-no-files-found: error
+          retention-days: 14
