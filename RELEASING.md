@@ -19,6 +19,8 @@ api-token-usage-latest.vsix
 
 该文件始终对应 `main` 分支的最新构建，适合测试。
 
+普通 CI 运行也会保留一个 VSIX Artifact：主分支和 PR 构建保留 14 天，发布工作流 Artifact 保留 30 天。
+
 ## 正式版本
 
 正式版本号以 `package.json` 中的 `version` 为准。例如：
