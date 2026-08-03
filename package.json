@@ -1,0 +1,133 @@
+{
+  "name": "api-token-usage",
+  "displayName": "API Token Usage",
+  "description": "在 VS Code 状态栏显示兼容 API Token 的剩余额度和使用情况。",
+  "version": "0.1.0",
+  "publisher": "hello-datang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "api",
+    "token",
+    "usage",
+    "quota",
+    "balance",
+    "ctapi"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hello-DaTang/API-Token-Usage.git"
+  },
+  "homepage": "https://github.com/Hello-DaTang/API-Token-Usage#readme",
+  "bugs": {
+    "url": "https://github.com/Hello-DaTang/API-Token-Usage/issues"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:apiTokenUsage.setApiKey",
+    "onCommand:apiTokenUsage.refresh",
+    "onCommand:apiTokenUsage.showDetails",
+    "onCommand:apiTokenUsage.clearApiKey",
+    "onCommand:apiTokenUsage.openSettings"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "apiTokenUsage.setApiKey",
+        "title": "API Token Usage: 设置 API Key"
+      },
+      {
+        "command": "apiTokenUsage.refresh",
+        "title": "API Token Usage: 刷新用量"
+      },
+      {
+        "command": "apiTokenUsage.showDetails",
+        "title": "API Token Usage: 查看详情"
+      },
+      {
+        "command": "apiTokenUsage.clearApiKey",
+        "title": "API Token Usage: 清除 API Key"
+      },
+      {
+        "command": "apiTokenUsage.openSettings",
+        "title": "API Token Usage: 打开设置"
+      }
+    ],
+    "configuration": {
+      "title": "API Token Usage",
+      "properties": {
+        "apiTokenUsage.label": {
+          "type": "string",
+          "default": "CTAPI",
+          "description": "状态栏显示名称。"
+        },
+        "apiTokenUsage.baseUrl": {
+          "type": "string",
+          "default": "https://ctapi.csxdtx.com:16000",
+          "description": "API 服务根地址。"
+        },
+        "apiTokenUsage.usagePath": {
+          "type": "string",
+          "default": "/api/usage/token",
+          "description": "用量查询路径；也可以填写完整 URL。"
+        },
+        "apiTokenUsage.authorizationScheme": {
+          "type": "string",
+          "default": "Bearer",
+          "description": "Authorization 请求头认证方案；留空时直接发送 API Key。"
+        },
+        "apiTokenUsage.refreshMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 1440,
+          "description": "自动刷新间隔，单位为分钟。"
+        },
+        "apiTokenUsage.quotaPerDollar": {
+          "type": "number",
+          "default": 500000,
+          "minimum": 1,
+          "description": "每 1 USD 对应的配额单位。"
+        },
+        "apiTokenUsage.currencySymbol": {
+          "type": "string",
+          "default": "$",
+          "description": "状态栏和详情中显示的货币符号。"
+        },
+        "apiTokenUsage.decimalPlaces": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 8,
+          "description": "状态栏金额保留的小数位数。"
+        },
+        "apiTokenUsage.timeoutSeconds": {
+          "type": "number",
+          "default": 15,
+          "minimum": 1,
+          "maximum": 300,
+          "description": "用量请求超时时间，单位为秒。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "check": "tsc --noEmit -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.100.0",
+    "@vscode/vsce": "^3.6.0",
+    "typescript": "^5.9.0"
+  }
+}
