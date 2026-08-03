@@ -1,0 +1,117 @@
+name: Release VSIX
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type check
+        run: npm run check
+
+      - name: Resolve release metadata
+        id: metadata
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            EXPECTED_TAG="v$VERSION"
+            if [[ "$GITHUB_REF_NAME" != "$EXPECTED_TAG" ]]; then
+              echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION. Expected $EXPECTED_TAG." >&2
+              exit 1
+            fi
+
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "asset=api-token-usage-$VERSION.vsix" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=continuous" >> "$GITHUB_OUTPUT"
+            echo "tag=continuous" >> "$GITHUB_OUTPUT"
+            echo "asset=api-token-usage-latest.vsix" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package VSIX
+        run: npm run package -- --out "${{ steps.metadata.outputs.asset }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.metadata.outputs.asset }}
+          path: ${{ steps.metadata.outputs.asset }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish continuous prerelease
+        if: steps.metadata.outputs.channel == 'continuous'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET: ${{ steps.metadata.outputs.asset }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --force continuous "$GITHUB_SHA"
+          git push --force origin refs/tags/continuous
+
+          NOTES="Automated VSIX build from main at commit $GITHUB_SHA. This prerelease is replaced whenever main changes."
+
+          if gh release view continuous >/dev/null 2>&1; then
+            gh release upload continuous "$ASSET" --clobber
+            gh release edit continuous \
+              --title "Continuous Build" \
+              --prerelease \
+              --notes "$NOTES"
+          else
+            gh release create continuous "$ASSET" \
+              --verify-tag \
+              --title "Continuous Build" \
+              --prerelease \
+              --notes "$NOTES"
+          fi
+
+      - name: Publish stable release
+        if: steps.metadata.outputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+          ASSET: ${{ steps.metadata.outputs.asset }}
+        shell: bash
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET" --clobber
+          else
+            gh release create "$TAG" "$ASSET" \
+              --verify-tag \
+              --title "API Token Usage $TAG" \
+              --generate-notes
+          fi
