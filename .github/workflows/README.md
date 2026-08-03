@@ -1,0 +1,2 @@
+- `ci.yml`: validates and packages every push and pull request.
+- `release.yml`: publishes continuous and tagged VSIX releases.
