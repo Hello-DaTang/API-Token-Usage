@@ -1,8 +1,8 @@
 {
   "name": "api-token-usage",
   "displayName": "API Token Usage",
-  "description": "在 VS Code 状态栏显示兼容 API Token 的剩余额度和使用情况。",
-  "version": "0.1.0",
+  "description": "在 VS Code 右侧状态栏显示兼容 API Token 的剩余额度比例和使用详情。",
+  "version": "0.2.0",
   "publisher": "hello-datang",
   "license": "MIT",
   "engines": {
@@ -65,7 +65,7 @@
         "apiTokenUsage.label": {
           "type": "string",
           "default": "CTAPI",
-          "description": "状态栏显示名称。"
+          "description": "悬浮详情中的服务名称。"
         },
         "apiTokenUsage.baseUrl": {
           "type": "string",
@@ -98,14 +98,28 @@
         "apiTokenUsage.currencySymbol": {
           "type": "string",
           "default": "$",
-          "description": "状态栏和详情中显示的货币符号。"
+          "description": "悬浮详情和复制摘要中显示的货币符号。"
         },
         "apiTokenUsage.decimalPlaces": {
           "type": "integer",
           "default": 2,
           "minimum": 0,
           "maximum": 8,
-          "description": "状态栏金额保留的小数位数。"
+          "description": "金额摘要保留的小数位数。"
+        },
+        "apiTokenUsage.percentageDecimalPlaces": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 4,
+          "description": "状态栏和悬浮详情中的剩余比例小数位数。"
+        },
+        "apiTokenUsage.statusBarPriority": {
+          "type": "number",
+          "default": 10,
+          "minimum": -10000,
+          "maximum": 10000,
+          "description": "右侧状态栏排序优先级；数值越低通常越靠右，可用于调整到 GitHub Copilot 旁边。"
         },
         "apiTokenUsage.timeoutSeconds": {
           "type": "number",
