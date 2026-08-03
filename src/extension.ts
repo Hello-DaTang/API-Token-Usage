@@ -21,6 +21,8 @@ interface UsageSettings {
   quotaPerDollar: number;
   currencySymbol: string;
   decimalPlaces: number;
+  percentageDecimalPlaces: number;
+  statusBarPriority: number;
   timeoutSeconds: number;
 }
 
@@ -31,7 +33,7 @@ interface ActionQuickPickItem extends vscode.QuickPickItem {
 type JsonRecord = Record<string, unknown>;
 
 class UsageController implements vscode.Disposable {
-  private readonly statusBarItem: vscode.StatusBarItem;
+  private statusBarItem: vscode.StatusBarItem;
   private readonly output: vscode.OutputChannel;
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -41,14 +43,7 @@ class UsageController implements vscode.Disposable {
   private lastError: string | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    this.statusBarItem = vscode.window.createStatusBarItem(
-      "apiTokenUsage.status",
-      vscode.StatusBarAlignment.Left,
-      20
-    );
-    this.statusBarItem.name = "API Token Usage";
-    this.statusBarItem.command = "apiTokenUsage.showDetails";
-
+    this.statusBarItem = this.createStatusBarItem();
     this.output = vscode.window.createOutputChannel("API Token Usage");
 
     this.disposables.push(
@@ -58,10 +53,17 @@ class UsageController implements vscode.Disposable {
       vscode.commands.registerCommand("apiTokenUsage.clearApiKey", () => this.clearApiKey()),
       vscode.commands.registerCommand("apiTokenUsage.openSettings", () => this.openSettings()),
       vscode.workspace.onDidChangeConfiguration((event) => {
-        if (event.affectsConfiguration(CONFIG_SECTION)) {
-          this.configureRefreshTimer();
-          void this.refresh(false);
+        if (!event.affectsConfiguration(CONFIG_SECTION)) {
+          return;
         }
+
+        if (event.affectsConfiguration(`${CONFIG_SECTION}.statusBarPriority`)) {
+          this.statusBarItem.dispose();
+          this.statusBarItem = this.createStatusBarItem();
+        }
+
+        this.configureRefreshTimer();
+        void this.refresh(false);
       })
     );
   }
@@ -75,7 +77,6 @@ class UsageController implements vscode.Disposable {
   dispose(): void {
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
-      this.refreshTimer = undefined;
     }
 
     for (const disposable of this.disposables) {
@@ -84,6 +85,22 @@ class UsageController implements vscode.Disposable {
 
     this.statusBarItem.dispose();
     this.output.dispose();
+  }
+
+  private createStatusBarItem(): vscode.StatusBarItem {
+    const priority = this.getSettings().statusBarPriority;
+    const item = vscode.window.createStatusBarItem(
+      "apiTokenUsage.status",
+      vscode.StatusBarAlignment.Right,
+      priority
+    );
+
+    item.name = "API Token Usage - 剩余比例";
+    item.command = "apiTokenUsage.showDetails";
+    item.text = "$(sync~spin) --%";
+    item.tooltip = "正在初始化 API Token Usage...";
+    item.show();
+    return item;
   }
 
   private async setApiKey(): Promise<void> {
@@ -166,7 +183,7 @@ class UsageController implements vscode.Disposable {
       },
       {
         label: "$(settings-gear) 打开设置",
-        description: "修改地址、刷新间隔和换算比例",
+        description: "修改地址、刷新间隔和显示位置",
         action: "settings"
       },
       {
@@ -214,7 +231,7 @@ class UsageController implements vscode.Disposable {
 
     const text = this.formatSnapshot(this.snapshot, this.getSettings(), 4);
     await vscode.env.clipboard.writeText(text);
-    void vscode.window.showInformationMessage("API Token 用量摘要已复制。")
+    void vscode.window.showInformationMessage("API Token 用量摘要已复制。");
   }
 
   private async openSettings(): Promise<void> {
@@ -257,7 +274,7 @@ class UsageController implements vscode.Disposable {
     }
 
     const settings = this.getSettings();
-    this.renderRefreshing(settings.label);
+    this.renderRefreshing();
 
     try {
       const snapshot = await this.fetchUsage(apiKey, settings);
@@ -270,7 +287,7 @@ class UsageController implements vscode.Disposable {
     } catch (error) {
       const message = this.toErrorMessage(error);
       this.lastError = message;
-      this.renderError(settings.label, message);
+      this.renderError(message);
       this.output.appendLine(`[${new Date().toISOString()}] 用量刷新失败：${message}`);
 
       if (showError) {
@@ -341,15 +358,13 @@ class UsageController implements vscode.Disposable {
 
       const totalUsed = this.readNumber(data, "total_used") ?? 0;
       const totalGranted = this.readNumber(data, "total_granted") ?? 0;
-      const planName = this.readString(data, "name") || "API Token";
-      const unlimited = data.unlimited_quota === true;
 
       return {
-        planName,
+        planName: this.readString(data, "name") || "API Token",
         remaining: totalAvailable / settings.quotaPerDollar,
         used: totalUsed / settings.quotaPerDollar,
         total: totalGranted / settings.quotaPerDollar,
-        unlimited,
+        unlimited: data.unlimited_quota === true,
         updatedAt: new Date()
       };
     } catch (error) {
@@ -363,49 +378,84 @@ class UsageController implements vscode.Disposable {
   }
 
   private renderMissingKey(): void {
-    const label = this.safeLabel(this.getSettings().label);
-    this.statusBarItem.text = `$(key) ${label} 未配置`;
+    this.statusBarItem.text = "$(key) --%";
     this.statusBarItem.tooltip = "点击设置 API Key";
     this.statusBarItem.command = "apiTokenUsage.setApiKey";
     this.statusBarItem.show();
   }
 
-  private renderRefreshing(label: string): void {
-    this.statusBarItem.text = `$(sync~spin) ${this.safeLabel(label)}`;
+  private renderRefreshing(): void {
+    this.statusBarItem.text = "$(sync~spin) --%";
     this.statusBarItem.tooltip = "正在查询 API Token 用量...";
     this.statusBarItem.command = "apiTokenUsage.showDetails";
     this.statusBarItem.show();
   }
 
-  private renderError(label: string, message: string): void {
-    this.statusBarItem.text = `$(warning) ${this.safeLabel(label)}`;
+  private renderError(message: string): void {
+    this.statusBarItem.text = "$(warning) --%";
     this.statusBarItem.tooltip = `额度查询失败：${message}\n\n点击查看详情或重新配置。`;
     this.statusBarItem.command = "apiTokenUsage.showDetails";
     this.statusBarItem.show();
   }
 
   private renderSnapshot(snapshot: UsageSnapshot, settings: UsageSettings): void {
-    const label = this.safeLabel(settings.label);
+    const percentage = this.getRemainingPercentage(snapshot);
+
     if (snapshot.unlimited) {
-      this.statusBarItem.text = `$(infinity) ${label} 无限额度`;
+      this.statusBarItem.text = "$(infinity) ∞";
+    } else if (percentage === undefined) {
+      this.statusBarItem.text = "$(pie-chart) --%";
     } else {
-      this.statusBarItem.text = `$(credit-card) ${label} ${settings.currencySymbol}${snapshot.remaining.toFixed(settings.decimalPlaces)}`;
+      this.statusBarItem.text = `$(pie-chart) ${percentage.toFixed(settings.percentageDecimalPlaces)}%`;
     }
+
+    this.statusBarItem.tooltip = this.buildTooltip(snapshot, settings, percentage);
+    this.statusBarItem.command = "apiTokenUsage.showDetails";
+    this.statusBarItem.show();
+  }
+
+  private buildTooltip(
+    snapshot: UsageSnapshot,
+    settings: UsageSettings,
+    percentage: number | undefined
+  ): vscode.MarkdownString {
+    const label = this.safeLabel(settings.label);
+    const remainingText = snapshot.unlimited
+      ? "无限额度"
+      : `${settings.currencySymbol}${snapshot.remaining.toFixed(4)}`;
+    const percentageText = snapshot.unlimited
+      ? "无限"
+      : percentage === undefined
+        ? "无法计算"
+        : `${percentage.toFixed(settings.percentageDecimalPlaces)}%`;
+
+    const rows: Array<[string, string]> = [
+      ["计划", snapshot.planName],
+      ["剩余", remainingText],
+      ["已使用", `${settings.currencySymbol}${snapshot.used.toFixed(4)}`],
+      ["总额度", `${settings.currencySymbol}${snapshot.total.toFixed(4)}`],
+      ["剩余比例", percentageText],
+      ["更新时间", snapshot.updatedAt.toLocaleString()]
+    ];
 
     const tooltip = new vscode.MarkdownString(undefined, true);
     tooltip.appendMarkdown(`**${this.escapeMarkdown(label)} 用量**\n\n`);
-    tooltip.appendMarkdown(`${this.formatSnapshot(snapshot, settings, 4).replaceAll("\n", "  \n")}\n\n`);
-    tooltip.appendMarkdown("点击打开详情菜单。\n");
+    tooltip.appendMarkdown("| 项目 | 数值 |\n");
+    tooltip.appendMarkdown("| :--- | ---: |\n");
 
-    this.statusBarItem.tooltip = tooltip;
-    this.statusBarItem.command = "apiTokenUsage.showDetails";
-    this.statusBarItem.show();
+    for (const [name, value] of rows) {
+      tooltip.appendMarkdown(`| ${this.escapeTableCell(name)} | ${this.escapeTableCell(value)} |\n`);
+    }
+
+    tooltip.appendMarkdown("\n点击打开详情菜单。");
+    return tooltip;
   }
 
   private formatSnapshot(snapshot: UsageSnapshot, settings: UsageSettings, decimals: number): string {
     const remainingText = snapshot.unlimited
       ? "无限额度"
       : `${settings.currencySymbol}${snapshot.remaining.toFixed(decimals)}`;
+    const percentage = this.getRemainingPercentage(snapshot);
 
     const lines = [
       `计划：${snapshot.planName}`,
@@ -414,13 +464,28 @@ class UsageController implements vscode.Disposable {
       `总额度：${settings.currencySymbol}${snapshot.total.toFixed(decimals)}`
     ];
 
-    if (!snapshot.unlimited && snapshot.total > 0) {
-      const percent = Math.max(0, Math.min(100, (snapshot.remaining / snapshot.total) * 100));
-      lines.push(`剩余比例：${percent.toFixed(1)}%`);
+    if (snapshot.unlimited) {
+      lines.push("剩余比例：无限");
+    } else if (percentage !== undefined) {
+      lines.push(`剩余比例：${percentage.toFixed(settings.percentageDecimalPlaces)}%`);
+    } else {
+      lines.push("剩余比例：无法计算");
     }
 
     lines.push(`更新时间：${snapshot.updatedAt.toLocaleString()}`);
     return lines.join("\n");
+  }
+
+  private getRemainingPercentage(snapshot: UsageSnapshot): number | undefined {
+    if (snapshot.unlimited) {
+      return 100;
+    }
+
+    if (!(snapshot.total > 0)) {
+      return undefined;
+    }
+
+    return Math.max(0, Math.min(100, (snapshot.remaining / snapshot.total) * 100));
   }
 
   private getSettings(): UsageSettings {
@@ -432,9 +497,17 @@ class UsageController implements vscode.Disposable {
       usagePath: config.get<string>("usagePath", "/api/usage/token").trim(),
       authorizationScheme: config.get<string>("authorizationScheme", "Bearer").trim(),
       refreshMinutes: this.clamp(config.get<number>("refreshMinutes", 5), 1, 1440),
-      quotaPerDollar: this.clamp(config.get<number>("quotaPerDollar", 500000), 1, Number.MAX_SAFE_INTEGER),
+      quotaPerDollar: this.clamp(
+        config.get<number>("quotaPerDollar", 500000),
+        1,
+        Number.MAX_SAFE_INTEGER
+      ),
       currencySymbol: config.get<string>("currencySymbol", "$"),
       decimalPlaces: Math.trunc(this.clamp(config.get<number>("decimalPlaces", 2), 0, 8)),
+      percentageDecimalPlaces: Math.trunc(
+        this.clamp(config.get<number>("percentageDecimalPlaces", 1), 0, 4)
+      ),
+      statusBarPriority: this.clamp(config.get<number>("statusBarPriority", 10), -10000, 10000),
       timeoutSeconds: this.clamp(config.get<number>("timeoutSeconds", 15), 1, 300)
     };
   }
@@ -488,7 +561,15 @@ class UsageController implements vscode.Disposable {
   }
 
   private escapeMarkdown(value: string): string {
-    return value.replace(/[\\`*_{}\[\]()#+\-.!|>]/g, "\\$&");
+    return value.replace(/[\\`*_{}[\]()#+\-.!|>]/g, "\\$&");
+  }
+
+  private escapeTableCell(value: string): string {
+    return value
+      .replace(/\\/g, "\\\\")
+      .replace(/\|/g, "\\|")
+      .replace(/\r?\n/g, " ")
+      .trim();
   }
 
   private toErrorMessage(error: unknown): string {
