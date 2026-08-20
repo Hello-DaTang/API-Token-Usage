@@ -112,7 +112,7 @@
           "default": 1,
           "minimum": 0,
           "maximum": 4,
-          "description": "状态栏和悬浮详情中的剩余比例小数位数。"
+          "description": "悬浮详情中的剩余比例小数位数。"
         },
         "apiTokenUsage.statusBarPriority": {
           "type": "number",
