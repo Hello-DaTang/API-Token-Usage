@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 
 const SECRET_KEY = "apiTokenUsage.apiKey";
 const CONFIG_SECTION = "apiTokenUsage";
+const STATUS_BAR_USD_TO_CNY_RATE = 7;
+const STATUS_BAR_CNY_DECIMAL_PLACES = 3;
 
 interface UsageSnapshot {
   planName: string;
@@ -95,9 +97,9 @@ class UsageController implements vscode.Disposable {
       priority
     );
 
-    item.name = "API Token Usage - 剩余比例";
+    item.name = "API Token Usage - 剩余余额";
     item.command = "apiTokenUsage.showDetails";
-    item.text = "$(sync~spin) --%";
+    item.text = "$(sync~spin) ¥--";
     item.tooltip = "正在初始化 API Token Usage...";
     item.show();
     return item;
@@ -378,21 +380,21 @@ class UsageController implements vscode.Disposable {
   }
 
   private renderMissingKey(): void {
-    this.statusBarItem.text = "$(key) --%";
+    this.statusBarItem.text = "$(key) ¥--";
     this.statusBarItem.tooltip = "点击设置 API Key";
     this.statusBarItem.command = "apiTokenUsage.setApiKey";
     this.statusBarItem.show();
   }
 
   private renderRefreshing(): void {
-    this.statusBarItem.text = "$(sync~spin) --%";
+    this.statusBarItem.text = "$(sync~spin) ¥--";
     this.statusBarItem.tooltip = "正在查询 API Token 用量...";
     this.statusBarItem.command = "apiTokenUsage.showDetails";
     this.statusBarItem.show();
   }
 
   private renderError(message: string): void {
-    this.statusBarItem.text = "$(warning) --%";
+    this.statusBarItem.text = "$(warning) ¥--";
     this.statusBarItem.tooltip = `额度查询失败：${message}\n\n点击查看详情或重新配置。`;
     this.statusBarItem.command = "apiTokenUsage.showDetails";
     this.statusBarItem.show();
@@ -403,10 +405,12 @@ class UsageController implements vscode.Disposable {
 
     if (snapshot.unlimited) {
       this.statusBarItem.text = "$(infinity) ∞";
-    } else if (percentage === undefined) {
-      this.statusBarItem.text = "$(pie-chart) --%";
     } else {
-      this.statusBarItem.text = `$(pie-chart) ${percentage.toFixed(settings.percentageDecimalPlaces)}%`;
+      const cnyRemaining = this.truncateDecimals(
+        snapshot.remaining * STATUS_BAR_USD_TO_CNY_RATE,
+        STATUS_BAR_CNY_DECIMAL_PLACES
+      );
+      this.statusBarItem.text = `$(credit-card) ¥${cnyRemaining.toFixed(STATUS_BAR_CNY_DECIMAL_PLACES)}`;
     }
 
     this.statusBarItem.tooltip = this.buildTooltip(snapshot, settings, percentage);
@@ -496,7 +500,7 @@ class UsageController implements vscode.Disposable {
       baseUrl: config.get<string>("baseUrl", "https://ctapi.csxdtx.com:16000").trim(),
       usagePath: config.get<string>("usagePath", "/api/usage/token").trim(),
       authorizationScheme: config.get<string>("authorizationScheme", "Bearer").trim(),
-      refreshMinutes: this.clamp(config.get<number>("refreshMinutes", 5), 1, 1440),
+      refreshMinutes: this.clamp(config.get<number>("refreshMinutes", 30), 1, 1440),
       quotaPerDollar: this.clamp(
         config.get<number>("quotaPerDollar", 500000),
         1,
@@ -554,6 +558,11 @@ class UsageController implements vscode.Disposable {
       return min;
     }
     return Math.min(max, Math.max(min, value));
+  }
+
+  private truncateDecimals(value: number, decimals: number): number {
+    const factor = 10 ** decimals;
+    return Math.trunc(value * factor) / factor;
   }
 
   private safeLabel(value: string): string {

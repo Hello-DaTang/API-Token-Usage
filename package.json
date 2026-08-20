@@ -1,7 +1,7 @@
 {
   "name": "api-token-usage",
   "displayName": "API Token Usage",
-  "description": "在 VS Code 右侧状态栏显示兼容 API Token 的剩余额度比例和使用详情。",
+  "description": "在 VS Code 右侧状态栏显示兼容 API Token 的剩余额度和使用详情。",
   "version": "0.2.0",
   "publisher": "hello-datang",
   "license": "MIT",
@@ -84,7 +84,7 @@
         },
         "apiTokenUsage.refreshMinutes": {
           "type": "number",
-          "default": 5,
+          "default": 30,
           "minimum": 1,
           "maximum": 1440,
           "description": "自动刷新间隔，单位为分钟。"
@@ -112,7 +112,7 @@
           "default": 1,
           "minimum": 0,
           "maximum": 4,
-          "description": "状态栏和悬浮详情中的剩余比例小数位数。"
+          "description": "悬浮详情中的剩余比例小数位数。"
         },
         "apiTokenUsage.statusBarPriority": {
           "type": "number",
